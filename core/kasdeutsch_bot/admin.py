@@ -1,10 +1,12 @@
 from django.contrib import admin
 from django.db.models.constraints import CheckConstraint
-from .models import TelegramState, TelegramChat, TelegramUser, Model, Nomination, Image, Vote
+from .models import TelegramState, TelegramChat, \
+    TelegramUser, Model, Nomination, Image, Vote, UserVote
 
 # admin.site.register(TelegramState)
 # admin.site.register(TelegramChat)
-admin.site.register(TelegramUser)
+#admin.site.register(TelegramUser)
+#admin.site.register(UserVote)
 
 class ModelImagesInline(admin.StackedInline):
     model = Image

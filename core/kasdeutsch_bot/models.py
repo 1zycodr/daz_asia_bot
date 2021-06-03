@@ -5,7 +5,16 @@ from django_tgbot.models import AbstractTelegramUser, AbstractTelegramChat, Abst
 
 
 class TelegramUser(AbstractTelegramUser):
-    voted = models.BooleanField(verbose_name='Проголосовал', default=False, blank=True)
+    votes = models.ManyToManyField('Nomination', through='UserVote')
+
+
+class UserVote(models.Model):
+    tg_user = models.ForeignKey('TelegramUser', on_delete=models.CASCADE)
+    nomination = models.ForeignKey('Nomination', on_delete=models.CASCADE)
+    model = models.ForeignKey('Model', on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ('tg_user', 'nomination')
 
 
 class TelegramChat(AbstractTelegramChat):
