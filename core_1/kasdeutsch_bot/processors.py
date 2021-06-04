@@ -7,8 +7,7 @@ from .models import TelegramState, TelegramUser
 from .bot import TelegramBot
 from .senders import send_start_message, send_unk_com_message, \
     send_nomination_models, send_model, process_next_photo, \
-    process_prev_photo, send_already_voted, process_vote, \
-    send_about, process_biography   
+    process_prev_photo, send_already_voted, process_vote, send_about   
 from .callback_types import CallbackTypes
 
 state_manager.set_default_update_types(update_types.Message)
@@ -19,9 +18,9 @@ available_options = {
 
 def dispatch(bot: TelegramBot, message: Message, chat_id):
     try:
-        available_options[message.get_text()](bot, chat_id, message.get_message_id())
+        available_options[message.get_text()](bot, chat_id)
     except KeyError:
-        send_unk_com_message(bot, chat_id, message.get_message_id())
+        send_unk_com_message(bot, chat_id)
 
 
 def dispatch_callback(bot: TelegramBot, callback, chat_id, tg_user):
@@ -35,13 +34,11 @@ def dispatch_callback(bot: TelegramBot, callback, chat_id, tg_user):
 
     if err is None: 
         if callback_type == CallbackTypes.NOMINATION:
-            send_nomination_models(bot, chat_id, callback.get_message().get_message_id(),\
-                callback_answ_data, tg_user)
+            send_nomination_models(bot, chat_id, callback_answ_data, tg_user)
         elif callback_type == CallbackTypes.MODEL:
-            send_model(bot, chat_id, callback.get_message().get_message_id(),\
-                callback_answ_data, tg_user)
+            send_model(bot, chat_id, callback_answ_data, tg_user)
         elif callback_type == CallbackTypes.START: 
-            send_start_message(bot, chat_id, callback.get_message().get_message_id(), send=False)
+            send_start_message(bot, chat_id)
         elif callback_type == CallbackTypes.NEXT_PHOTO:
             process_next_photo(bot, chat_id, callback.get_message().get_message_id(), \
                 callback_answ_data, tg_user)
@@ -54,10 +51,7 @@ def dispatch_callback(bot: TelegramBot, callback, chat_id, tg_user):
             process_vote(bot, chat_id, callback.get_message().get_message_id(), \
                 callback_answ_data, tg_user)
         elif callback_type == CallbackTypes.ABOUT:
-            send_about(bot, chat_id, callback.get_message().get_message_id())
-        elif callback_type == CallbackTypes.BIOGRAPHY:
-            process_biography(bot, chat_id, callback.get_message().get_message_id(), \
-                callback_answ_data, tg_user)
+            send_about(bot, chat_id)
     else:
         print('\n\n' + '-' * 15 + 'ERROR' + '-' * 15)
         print(err + "\n\n")        
@@ -65,9 +59,7 @@ def dispatch_callback(bot: TelegramBot, callback, chat_id, tg_user):
     bot.answerCallbackQuery(callback.get_id())
 
 
-@processor(state_manager, from_states=state_types.All, message_types=[message_types.Text, \
-    message_types.Video, message_types.Audio, message_types.Voice, message_types.Sticker, message_types.Animation,\
-    message_types.Document, message_types.Poll, message_types.Location, message_types.Contact, message_types.Photo])
+@processor(state_manager, from_states=state_types.All, message_types=[message_types.Text])
 def start_message(bot: TelegramBot, update: Update, state: TelegramState):
     chat, message, user = update.get_chat(), \
         update.get_message(), update.get_user()

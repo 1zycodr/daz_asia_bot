@@ -1,12 +1,19 @@
 from django.db import models
 from django.db.models import CASCADE
-
+from requests.sessions import default_headers
+from django.core.exceptions import ValidationError
 from django_tgbot.models import AbstractTelegramUser, AbstractTelegramChat, AbstractTelegramState
+
+
+def validate_image(image):
+    if image.file.size > 2097152:
+        raise ValidationError('Размер картинки слишком большой (> 2 МБ)')
+    elif image.file.size < 51200:
+        raise ValidationError('Размер картинки слишком маленький (< 50 КБ)')
 
 
 class TelegramUser(AbstractTelegramUser):
     votes = models.ManyToManyField('Nomination', through='UserVote')
-
 
 class UserVote(models.Model):
     tg_user = models.ForeignKey('TelegramUser', on_delete=models.CASCADE)
@@ -30,7 +37,10 @@ class TelegramState(AbstractTelegramState):
 
 
 class Nomination(models.Model):
+    competition = models.ForeignKey('Competition', on_delete=models.CASCADE, blank=True, null=True, verbose_name='Конкурс:')
+
     name = models.CharField(max_length=100, verbose_name='Название', unique=True)
+    image = models.ImageField(verbose_name='Фото', default='demo_nomination1234.png', validators=[validate_image])
 
     class Meta:
         verbose_name = 'номинацию'
@@ -64,29 +74,47 @@ class Model(models.Model):
     nominations = models.ManyToManyField(Nomination, through='Vote', verbose_name='Номинации')
     
     first_name = models.CharField(max_length=200, verbose_name='Имя')
-    second_name = models.CharField(max_length=200, verbose_name='Фамилия', null=True, blank=True)
+    second_name = models.CharField(max_length=200, verbose_name='Фамилия', default='')
     last_name = models.CharField(max_length=200, verbose_name='Отчество', null=True, blank=True)
 
-    description = models.TextField(verbose_name='Биография', null=True, blank=True)
+    description = models.TextField(verbose_name='Биография', null=True, blank=True, max_length=1000)
 
     class Meta:
         verbose_name = 'Модель'
         verbose_name_plural = 'модели'
 
     def __str__(self) -> str:
-        show_str = f'#{self.id} {self.first_name}'
+        show_str = f'{self.second_name} {self.first_name}'
 
-        if self.second_name:
-            show_str += ' ' + self.second_name
-        
         if self.last_name:
             show_str += ' ' + self.last_name
 
         return show_str
 
 
+class Competition(models.Model):
+    title = models.CharField(max_length=255, verbose_name='Название')
+    is_active = models.BooleanField(verbose_name='Активный', default=False, blank=True)    
+    about = models.TextField(verbose_name='О конкурсе', default='', blank=True)
+    image = models.ImageField(verbose_name='Фото', validators=[validate_image])
+
+    class Meta:
+        verbose_name = 'Конкурс'
+        verbose_name_plural = 'конкурсы'
+
+    def __str__(self) -> str:
+        return f"{self.title} ({'активен' if self.is_active else 'не активен'})"
+
+    def clean(self, *args, **kwargs):
+        model = self.__class__
+        if model.objects.filter(is_active=True).exists() and self.is_active and model.objects.filter(is_active=True).first() != self:
+            raise ValidationError("Только один конкурс может быть активным!")
+        super().clean(*args, **kwargs)
+
+
+        
 class Image(models.Model):
-    image = models.ImageField(verbose_name='Фото')
+    image = models.ImageField(verbose_name='Фото', validators=[validate_image])
     model = models.ForeignKey(Model, on_delete=models.CASCADE)
 
     class Meta:
@@ -94,4 +122,34 @@ class Image(models.Model):
         verbose_name_plural = 'изображения'
 
     def __str__(self) -> str:
-        return f'Фото модели #{self.model.id}'
+        return f'Фото кандидата #{self.model.id}'
+
+
+class BotContent(models.Model):
+    about = models.CharField(verbose_name='Текст кнопки "О конкурсе"', max_length=50, default='О конкурсе')
+    update = models.CharField(verbose_name='Текст кнопки "Обновить"', max_length=50, default='Обновить')
+    back = models.CharField(verbose_name='Текст кнопки "Назад"', max_length=50, default='Назад')
+    show_bio = models.CharField(verbose_name='Текст кнопки "Показать биографию"', max_length=50, default='Биография')
+    hide_bio = models.CharField(verbose_name='Текст кнопки "Скрыть биографию"', max_length=50, default='Скрыть биографию')
+    vote = models.CharField(verbose_name='Текст кнопки "Проголосовать"', max_length=50, default='Проголосовать!')
+    next_photo = models.CharField(verbose_name='Текст кнопки следующей фотографии', max_length=50, default='>')
+    prev_photo = models.CharField(verbose_name='Текст кнопки предыдущей фотографии', max_length=50, default='<')
+    was_checked = models.CharField(verbose_name='Текст кнопки "Проголосовать", когда голос был учтён у текущей модели', max_length=50, default='Ваш голос за эту модель был учтён!')
+    was_checked_in_this_nomination = models.CharField(verbose_name='Текст кнопки "Проголосовать", когда голос был учтён у другой модели в этой категории', max_length=50, default='Вы уже проголосовали за модель в этой номинации!')
+    chose_nomination = models.CharField(verbose_name='Текст меню выбора номинации', max_length=255, default='Выберите номинацию, в которой хотите проголосовать. У вас есть один голос в каждой номинации.')
+    no_competition = models.CharField(verbose_name='Текст меню когда конкурс отсутствует', max_length=255, default='Нет активных конкурсов.')
+    update_menu = models.CharField(verbose_name='Текст меню обновления конкурса', max_length=255, default='Пожалуйста, обновите информацию о конкурсе!')
+    already_voted = models.CharField(verbose_name='Текст всплывающего окна, когда голос учтён', max_length=255, default='Ваш голос уже был учтён!')
+    votes = models.CharField(verbose_name='Текст кандидата когда человек проголосовал', max_length=255, default='голосов')
+    votess = models.CharField(verbose_name='Текст кандидата когда человек проголосовал, включая его голос', max_length=255, default='голосов, включая ваш')
+    candidates = models.CharField(verbose_name='Текст меню списка кандидатов', max_length=255, default='Кандидаты номинации')
+    no_competition_image = models.ImageField(verbose_name='Фото для сообщения "Нет соревнования"', validators=[validate_image])
+    update_menu_image = models.ImageField(verbose_name='Фото для меню обновления конкурса', validators=[validate_image])
+    default_model_photo = models.ImageField(verbose_name='Дефолтное фото кандидата', validators=[validate_image])
+
+    class Meta:
+        verbose_name = 'Настройки'
+        verbose_name_plural = 'настройки'
+
+    def __str__(self) -> str:
+        return 'Настройки'

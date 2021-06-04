@@ -9,17 +9,12 @@ class CallbackTypes:
     START = 'strt'
     ALREADY_VOTED = 'avtd'
     ABOUT = 'abut'
-    BIOGRAPHY = 'bio'
-
+    
     @staticmethod
     def set_nomination(nomination_id):
         return CallbackTypes.NOMINATION + str(nomination_id)
     
-    @staticmethod
-    def set_bio(model_id, photo_ind, nomination_id, status):
-        return CallbackTypes.BIOGRAPHY + str(model_id) + '|' + str(photo_ind)\
-            + '|' + str(nomination_id) + '|' + str(status)
-
+    
     @staticmethod
     def set_model(model_id, nomination_id):
         return CallbackTypes.MODEL + str(model_id) + \
@@ -27,24 +22,24 @@ class CallbackTypes:
 
     
     @staticmethod
-    def set_next_photo(model_id, photo_ind, nomination_id, status):
+    def set_next_photo(model_id, photo_ind, nomination_id):
         return CallbackTypes.NEXT_PHOTO + \
             str(model_id) + '|' + str(photo_ind) + \
-            '|' + str(nomination_id) + '|' + str(status)
+            '|' + str(nomination_id)
 
 
     @staticmethod
-    def set_prev_photo(model_id, photo_ind, nomination_id, status):
+    def set_prev_photo(model_id, photo_ind, nomination_id):
         return CallbackTypes.PREV_PHOTO + \
             str(model_id) + '|' + str(photo_ind) + \
-            '|' + str(nomination_id) + '|' + str(status)
+            '|' + str(nomination_id)
 
 
     @staticmethod
-    def set_vote(model_id, photo_ind, nomination_id, status):
+    def set_vote(model_id, photo_ind, nomination_id):
         return CallbackTypes.VOTE + \
             str(model_id) + '|' + str(photo_ind) + \
-            '|' + str(nomination_id) + '|' + str(status)
+            '|' + str(nomination_id)
 
 
     @staticmethod
@@ -83,53 +78,42 @@ class CallbackTypes:
 
             elif callback_data[:3] == CallbackTypes.NEXT_PHOTO:
                 try:
-                    model_id, photo_ind, nomination_id, status = callback_data[3:].split('|')
+                    model_id, photo_ind, nomination_id = callback_data[3:].split('|')
                 except ValueError:
-                    return '', '', 'callback type is next photo, but invalid model_id or photo_ind or nomination_id or status'
+                    return '', '', 'callback type is next photo, but invalid model_id or photo_ind or nomination_id'
                 
-                if model_id.isdigit() and photo_ind.isdigit() and nomination_id.isdigit() and status.isdigit():
-                    return CallbackTypes.NEXT_PHOTO, (int(model_id), int(photo_ind), int(nomination_id), int(status)), None
+                if model_id.isdigit() and photo_ind.isdigit() and nomination_id.isdigit():
+                    return CallbackTypes.NEXT_PHOTO, (int(model_id), int(photo_ind), int(nomination_id)), None
                 else:
-                    return '', '', 'callback type is next photo, but invalid type of model_id or photo_ind or nomination_id or status'
+                    return '', '', 'callback type is next photo, but invalid type of model_id or photo_ind or nomination_id'
 
             elif callback_data[:3] == CallbackTypes.PREV_PHOTO:
                 try:
-                    model_id, photo_ind, nomination_id, status = callback_data[3:].split('|')
+                    model_id, photo_ind, nomination_id = callback_data[3:].split('|')
                 except ValueError:
-                    return '', '', 'callback type is prev photo, but invalid model_id or photo_ind or nomination_id or status'
+                    return '', '', 'callback type is prev photo, but invalid model_id or photo_ind or nomination_id'
                 
-                if model_id.isdigit() and photo_ind.isdigit() and nomination_id.isdigit() and status.isdigit():
-                    return CallbackTypes.PREV_PHOTO, (int(model_id), int(photo_ind), int(nomination_id), int(status)), None
+                if model_id.isdigit() and photo_ind.isdigit() and nomination_id.isdigit():
+                    return CallbackTypes.PREV_PHOTO, (int(model_id), int(photo_ind), int(nomination_id)), None
                 else:
-                    return '', '', 'callback type is prev photo, but invalid type of model_id or photo_ind or nomination_id or status'
+                    return '', '', 'callback type is prev photo, but invalid type of model_id or photo_ind or nomination_id'
             
             elif callback_data[:4] == CallbackTypes.ALREADY_VOTED:
                 return CallbackTypes.ALREADY_VOTED, None, None
 
             elif callback_data[:3] == CallbackTypes.VOTE:
                 try:
-                    model_id, photo_ind, nomination_id, status = callback_data[3:].split('|')
+                    model_id, photo_ind, nomination_id = callback_data[3:].split('|')
                 except ValueError:
-                    return '', '', 'callback type is vote, but invalid model_id or photo_ind or nomination_id or status'
+                    return '', '', 'callback type is vote, but invalid model_id or photo_ind or nomination_id'
                 
-                if model_id.isdigit() and photo_ind.isdigit() and nomination_id.isdigit() and status.isdigit():
-                    return CallbackTypes.VOTE, (int(model_id), int(photo_ind), int(nomination_id), int(status)), None
+                if model_id.isdigit() and photo_ind.isdigit() and nomination_id.isdigit():
+                    return CallbackTypes.VOTE, (int(model_id), int(photo_ind), int(nomination_id)), None
                 else:
-                    return '', '', 'callback type is vote, but invalid type of model_id or photo_ind or nomination_id or status'
+                    return '', '', 'callback type is vote, but invalid type of model_id or photo_ind or nomination_id'
 
             elif callback_data[:4] == CallbackTypes.ABOUT:
                 return CallbackTypes.ABOUT, None, None                
-
-            elif callback_data[:3] == CallbackTypes.BIOGRAPHY:
-                try:
-                    model_id, photo_ind, nomination_id, status = callback_data[3:].split('|')
-                except ValueError:
-                    return '', '', 'callback type is vote, but invalid model_id or status or nomination_id'
-                
-                if model_id.isdigit() and status.isdigit() and nomination_id.isdigit() and photo_ind.isdigit():
-                    return CallbackTypes.BIOGRAPHY, (int(model_id), int(photo_ind), int(nomination_id), int(status)), None
-                else:
-                    return '', '', 'callback type is vote, but invalid type of model_id or status or nomination_id'
 
             else:
                 return CallbackTypes.UNKNOWN, '', None

@@ -5,326 +5,648 @@ from django_tgbot.types.keyboardbutton import KeyboardButton
 from django_tgbot.types.replykeyboardmarkup import ReplyKeyboardMarkup
 from django_tgbot.types.replykeyboardremove import ReplyKeyboardRemove
 from django_tgbot.types.inputmedia import InputMediaPhoto
-from .models import Nomination, TelegramUser, Vote, Model, Image, UserVote
+from .models import Nomination, TelegramUser, Vote, \
+    Model, Image, UserVote, Competition, BotContent
 from .callback_types import CallbackTypes 
 from .utils import check_vote
 
-def send_start_message(bot, chat_id):
+
+def send_start_message(bot, chat_id, message_id, send=True):
+    bot_content = BotContent.objects.all().last()
+
     buttons = []
     
-    for nomination in Nomination.objects.all():
+    competition = Competition.objects.filter(is_active=True)
+
+    if competition.exists():
+        competition = competition.first()
+        nominations = Nomination.objects.filter(competition=competition)
+
+        for nomination in nominations:
+            buttons.append([InlineKeyboardButton.a(
+                nomination.name, 
+                callback_data=CallbackTypes.set_nomination(nomination.id)
+            )])
+
         buttons.append([InlineKeyboardButton.a(
-            nomination.name, 
-            callback_data=CallbackTypes.set_nomination(nomination.id)
+            bot_content.about,
+            callback_data=CallbackTypes.ABOUT
         )])
 
-    buttons.append([InlineKeyboardButton.a(
-        'О конкурсе',
-        callback_data=CallbackTypes.ABOUT
-    )])
-
-    bot.sendMessage(
-        chat_id,
-        text='Выберите номинацию, в которой хотите проголосовать. У вас есть один голос в каждой номинации.', 
-        reply_markup=InlineKeyboardMarkup.a(buttons)
-    )
+        if send:
+            bot.sendPhoto(
+                chat_id,
+                caption=bot_content.chose_nomination, 
+                photo='https://1bot.wiedergeburt.kz' + competition.image.url,
+                reply_markup=InlineKeyboardMarkup.a(buttons)
+            )
+            bot.deleteMessage(
+                chat_id, message_id
+            )
+        else:
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + competition.image.url, 
+                bot_content.chose_nomination),
+                reply_markup=InlineKeyboardMarkup.a(buttons)
+            )
+    else:
+        if send:
+            bot.sendPhoto(
+                chat_id,
+                caption=bot_content.no_competition, 
+                photo='https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url,
+                reply_markup=InlineKeyboardMarkup.a([[
+                    InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+                ]])
+            )
+            bot.deleteMessage(
+                chat_id, message_id
+            )
+        else:
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url, 
+                bot_content.no_competition),
+                reply_markup=InlineKeyboardMarkup.a([[
+                    InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+                ]])
+            )
 
 
 def send_already_voted(bot, callback_id):
+    bot_content = BotContent.objects.all().last()
     bot.answerCallbackQuery(
         callback_id, 
-        text='Ваш голос за эту модель уже был учтён!'
+        text=bot_content.already_voted
     )
 
 
-def send_unk_com_message(bot, chat_id):
-    bot.sendMessage(
+def send_unk_com_message(bot, chat_id, message_id):
+    bot.deleteMessage(
         chat_id, 
-        text='Команда не распознана!'
+        message_id
     )
 
 
-def send_about(bot, chat_id):
-    print('ABOUT')
-    bot.sendMessage(
-        chat_id, 
-        text="""Внимание: голосование!
-Подводятся итоги фотоконкурса «Самая красивая немка Казахстана», организатором которого выступила редакция Республиканской немецкой газеты «Deutsche Allgemeine Zeitung».
-Участницы конкурса: девушки из числа активистов клубов немецкой молодёжи Казахстана.
-Предлагаем Вам познакомиться с фотографиями участниц и сведениями из их биографий с учетом семейных традиций, участия в общественной жизни этноса, владения немецким языком.
-Голосование будет проходить с 1 по 10 июня 2021 года через Telegram-канал.
-Победительница получит в награду сувенирную тарель, любезно предоставленную руководителем университетского объединения «WIUIM» д-ром Андреем Шнитковски.
-Отдай свой голос!""", 
-        reply_markup=InlineKeyboardMarkup.a([[InlineKeyboardButton.a('К номинациям', callback_data=CallbackTypes.START)]])
-    )
+def send_about(bot, chat_id, message_id):
+    bot_content = BotContent.objects.all().last()
+    competition = Competition.objects.filter(is_active=True)
 
-
-def send_nomination_models(bot, chat_id, nomination_id, tg_user):
-    buttons = []
-
-    voted, user_vote = check_vote(tg_user, nomination_id)
-
-    for vote in Vote.objects.filter(nomination_id=nomination_id):
-        model_name = str(vote.model)
-
-        if voted:
-            if user_vote.model.id == vote.model.id: 
-                model_name += f' ({vote.rating} проголосовавших, включая вас)'
-            else:
-                model_name += f' ({vote.rating} проголосовавших)'
-
-        buttons.append([InlineKeyboardButton.a(
-            model_name,
-            callback_data=CallbackTypes.set_model(vote.model.id, nomination_id)
-        )])
-
-    buttons.append([InlineKeyboardButton.a(
-        'О конкурсе', 
-        callback_data=CallbackTypes.ABOUT
-    )])
-
-    bot.sendMessage(
-        chat_id,
-        text='Модели номинации "' + Nomination.objects.get(id=nomination_id).name + '":', 
-        reply_markup=InlineKeyboardMarkup.a(buttons)
-    )
-
-
-def send_model(bot, chat_id, data, tg_user):
-    buttons = []
-    
-    model_id, nomination_id = data 
-
-    model = Model.objects.get(id=model_id)
-    photos = Image.objects.filter(model=model)
-
-    voted, user_vote = check_vote(tg_user, nomination_id)
-    
-    if len(photos) == 0:
-        photo = '/media/default_photo.jpg'
+    if competition.exists():
+        competition = competition.first()
+        bot.editMessageMedia(
+            chat_id=chat_id, 
+            message_id=message_id,
+            media=InputMediaPhoto.a(
+                'photo', 
+                'https://1bot.wiedergeburt.kz' + competition.image.url, 
+                competition.about
+            ),
+            reply_markup=InlineKeyboardMarkup.a([[InlineKeyboardButton.a(bot_content.back, callback_data=CallbackTypes.START)]])
+        )
     else:
-        photo = photos[0].image.url
-
-    if len(photos) > 1:
-        buttons.append([InlineKeyboardButton.a(
-            '>', 
-            callback_data=CallbackTypes.set_next_photo(model_id, 0, nomination_id)
-        )])
-    
-    if not voted:
-        buttons.append([InlineKeyboardButton.a(
-            'Проголосовать!', 
-            callback_data=CallbackTypes.set_vote(model_id, 0, nomination_id)
-        )])
-    elif user_vote.model.id == model_id:
-        buttons.append([InlineKeyboardButton.a(
-            'Ваш голос за эту модель был учтён!', 
-            callback_data=CallbackTypes.set_already_voted()
-        )])
+        bot.editMessageMedia(
+            chat_id=chat_id, 
+            message_id=message_id,
+            media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url, 
+            bot_content.no_competition),
+            reply_markup=InlineKeyboardMarkup.a([[
+                InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+            ]])
+        )
 
 
-    buttons.append([InlineKeyboardButton.a(
-        'К номинациям', 
-        callback_data=CallbackTypes.START
-    )])
+def send_nomination_models(bot, chat_id, message_id, nomination_id, tg_user):
+    bot_content = BotContent.objects.all().last()
+    competition = Competition.objects.filter(is_active=True)
 
-    buttons.append([InlineKeyboardButton.a(
-        'О конкурсе', 
-        callback_data=CallbackTypes.ABOUT
-    )])
+    if competition.exists():
+        competition = competition.first()
+        nominations = Nomination.objects.filter(competition=competition)
 
-    bot.sendMessage(
-        chat_id, 
-        str(model)
-    )
+        if nomination_id in [nom.id for nom in nominations]:
+            buttons = []
 
-    bot.sendPhoto(
-        chat_id, 
-        caption=model.description,
-        photo='https://1bot.wiedergeburt.kz/' + photo, 
-        reply_markup=InlineKeyboardMarkup.a(buttons)
-    )
+            voted, user_vote = check_vote(tg_user, nomination_id)
+
+            votes = Vote.objects.filter(nomination_id=nomination_id)
+
+            if not voted:
+                votes = votes.order_by('model__second_name')
+            else:
+                votes = votes.order_by('-rating', 'model__second_name')
+                
+            total_rating = sum([vote.rating for vote in votes])
+
+            for vote in votes:
+                model_name = str(vote.model)
+
+                if voted:
+                    if user_vote.model.id == vote.model.id: 
+                        model_name += f' ({int(vote.rating / total_rating * 100)}% {bot_content.votess})'
+                    else:
+                        model_name += f' ({int(vote.rating / total_rating * 100)}% {bot_content.votes})'
+
+                buttons.append([InlineKeyboardButton.a(
+                    model_name,
+                    callback_data=CallbackTypes.set_model(vote.model.id, nomination_id)
+                )])
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.back, 
+                callback_data=CallbackTypes.START
+            )])
+
+            bot.editMessageMedia(
+                chat_id=chat_id,
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + Nomination.objects.get(id=nomination_id).image.url, 
+                    f'{bot_content.candidates} "' + Nomination.objects.get(id=nomination_id).name + '":'),
+                reply_markup=InlineKeyboardMarkup.a(buttons)
+            )
+        else:
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', bot_content.update_menu_image, 
+                bot_content.update_menu),
+                reply_markup=InlineKeyboardMarkup.a([[
+                    InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+                ]])
+            )
+    else:
+        bot.editMessageMedia(
+            chat_id=chat_id, 
+            message_id=message_id,
+            media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url, 
+            bot_content.no_competition),
+            reply_markup=InlineKeyboardMarkup.a([[
+                InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+            ]])
+        )
+
+
+def send_model(bot, chat_id, message_id, data, tg_user):
+    bot_content = BotContent.objects.all().last()
+    competition = Competition.objects.filter(is_active=True)
+
+    if competition.exists():
+        competition = competition.first()
+        nominations = Nomination.objects.filter(competition=competition)
+
+        model_id, nomination_id = data 
+
+        if nomination_id in [nom.id for nom in nominations]:
+
+            buttons = []
+
+            model = Model.objects.get(id=model_id)
+            photos = Image.objects.filter(model=model)
+
+            voted, user_vote = check_vote(tg_user, nomination_id)
+            
+            if len(photos) == 0:
+                photo = bot_content.default_model_photo
+            else:
+                photo = photos[0].image.url
+
+            if len(photos) > 1:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.next_photo, 
+                    callback_data=CallbackTypes.set_next_photo(model_id, 0, nomination_id, 0)
+                )])
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.show_bio,
+                callback_data=CallbackTypes.set_bio(model_id, 0, nomination_id, 0)
+            )])
+            
+            if not voted:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.vote, 
+                    callback_data=CallbackTypes.set_vote(model_id, 0, nomination_id, 0)
+                )])
+            elif user_vote.model.id == model_id:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+            else:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked_in_this_nomination, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.back, 
+                callback_data=CallbackTypes.set_nomination(nomination_id)
+            )])
+
+            bot.editMessageMedia(
+                chat_id=chat_id,
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', 
+                    'https://1bot.wiedergeburt.kz' + photo, 
+                    str(model)
+                ),
+                reply_markup=InlineKeyboardMarkup.a(buttons)
+            )
+        else:
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', bot_content.update_menu_image, 
+                bot_content.update_menu),
+                reply_markup=InlineKeyboardMarkup.a([[
+                    InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+                ]])
+            )
+    else:
+        bot.editMessageMedia(
+            chat_id=chat_id, 
+            message_id=message_id,
+            media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url, 
+            bot_content.no_competition),
+            reply_markup=InlineKeyboardMarkup.a([[
+                InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+            ]])
+        )
 
 
 def process_next_photo(bot, chat_id, message_id, data, tg_user):
-    buttons = []
-    
-    model_id, photo_ind, nomination_id = data
-    photo_ind += 1
+    bot_content = BotContent.objects.all().last()
+    competition = Competition.objects.filter(is_active=True)
 
-    model = Model.objects.get(id=model_id)
-    photos = Image.objects.filter(model=model)
+    if competition.exists():
+        competition = competition.first()
+        nominations = Nomination.objects.filter(competition=competition)
 
-    photo = photos[photo_ind].image.url
+        model_id, photo_ind, nomination_id, status = data
 
-    photo_buttons = [InlineKeyboardButton.a(
-        '<', 
-        callback_data=CallbackTypes.set_prev_photo(model_id, photo_ind, nomination_id)
-    )]
+        if nomination_id in [nom.id for nom in nominations]:
+            buttons = []
+            
+            photo_ind += 1
 
-    if len(photos) - 1 != photo_ind:
-        photo_buttons.append(InlineKeyboardButton.a(
-            '>',
-            callback_data=CallbackTypes.set_next_photo(model_id, photo_ind, nomination_id)
-        ))
+            model = Model.objects.get(id=model_id)
+            photos = Image.objects.filter(model=model)
 
-    buttons.append(photo_buttons)
-    
-    voted, user_vote = check_vote(tg_user, nomination_id)
+            photo = photos[photo_ind].image.url
 
-    if not voted:
-        buttons.append([InlineKeyboardButton.a(
-            'Проголосовать!', 
-            callback_data=CallbackTypes.set_vote(model_id, photo_ind, nomination_id)
-        )])
-    elif user_vote.model.id == model_id:
-        buttons.append([InlineKeyboardButton.a(
-            'Ваш голос за эту модель был учтён!', 
-            callback_data=CallbackTypes.set_already_voted()
-        )])
+            photo_buttons = [InlineKeyboardButton.a(
+                bot_content.prev_photo, 
+                callback_data=CallbackTypes.set_prev_photo(model_id, photo_ind, nomination_id, status)
+            )]
 
-    buttons.append([InlineKeyboardButton.a(
-        'К номинациям', 
-        callback_data=CallbackTypes.START
-    )])
-    
-    buttons.append([InlineKeyboardButton.a(
-        'О конкурсе', 
-        callback_data=CallbackTypes.ABOUT
-    )])
+            if len(photos) - 1 != photo_ind:
+                photo_buttons.append(InlineKeyboardButton.a(
+                    bot_content.next_photo,
+                    callback_data=CallbackTypes.set_next_photo(model_id, photo_ind, nomination_id, status)
+                ))
 
-    bot.editMessageMedia(
-        chat_id=chat_id, 
-        message_id=message_id,
-        media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + photo, model.description), 
-        reply_markup=InlineKeyboardMarkup.a(buttons)
-    )
+            buttons.append(photo_buttons)
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.show_bio if status == 0 else bot_content.hide_bio,
+                callback_data=CallbackTypes.set_bio(model_id, photo_ind, nomination_id, status)
+            )])
+            
+            voted, user_vote = check_vote(tg_user, nomination_id)
+
+            if not voted:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.vote, 
+                    callback_data=CallbackTypes.set_vote(model_id, photo_ind, nomination_id, status)
+                )])
+            elif user_vote.model.id == model_id:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+            else: 
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked_in_this_nomination, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.back, 
+                callback_data=CallbackTypes.set_nomination(nomination_id)
+            )])
+            
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + photo, str(model) + (f'\n{model.description}' if status == 1 else '')), 
+                reply_markup=InlineKeyboardMarkup.a(buttons)
+            )
+        else:
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', bot_content.update_menu_image, 
+                bot_content.update_menu),
+                reply_markup=InlineKeyboardMarkup.a([[
+                    InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+                ]])
+            )
+    else:
+        bot.editMessageMedia(
+            chat_id=chat_id, 
+            message_id=message_id,
+            media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url, 
+            bot_content.no_competition),
+            reply_markup=InlineKeyboardMarkup.a([[
+                InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+            ]])
+        )
 
 
 def process_prev_photo(bot, chat_id, message_id, data, tg_user):
-    buttons = []
-    
-    model_id, photo_ind, nomination_id = data
-    photo_ind -= 1
+    bot_content = BotContent.objects.all().last()
+    competition = Competition.objects.filter(is_active=True)
 
-    model = Model.objects.get(id=model_id)
-    photos = Image.objects.filter(model=model)
+    if competition.exists():
+        competition = competition.first()
+        nominations = Nomination.objects.filter(competition=competition)
 
-    photo = photos[photo_ind].image.url
+        model_id, photo_ind, nomination_id, status = data
 
-    photo_buttons = [InlineKeyboardButton.a(
-        '>', 
-        callback_data=CallbackTypes.set_next_photo(model_id, photo_ind, nomination_id)
-    )]
+        if nomination_id in [nom.id for nom in nominations]:
+            buttons = []
+            
+            photo_ind -= 1
 
-    if photo_ind != 0:
-        photo_buttons.append(InlineKeyboardButton.a(
-            '<',
-            callback_data=CallbackTypes.set_prev_photo(model_id, photo_ind, nomination_id)
-        ))
-    
-    buttons.append(photo_buttons[::-1])
+            model = Model.objects.get(id=model_id)
+            photos = Image.objects.filter(model=model)
 
-    voted, user_vote = check_vote(tg_user, nomination_id)
+            photo = photos[photo_ind].image.url
 
-    if not voted:
-        buttons.append([InlineKeyboardButton.a(
-            'Проголосовать!', 
-            callback_data=CallbackTypes.set_vote(model_id, photo_ind, nomination_id)
-        )])
-    elif user_vote.model.id == model_id:
-        buttons.append([InlineKeyboardButton.a(
-            'Ваш голос за эту модель был учтён!', 
-            callback_data=CallbackTypes.set_already_voted()
-        )])
+            photo_buttons = [InlineKeyboardButton.a(
+                bot_content.next_photo, 
+                callback_data=CallbackTypes.set_next_photo(model_id, photo_ind, nomination_id, status)
+            )]
 
-    buttons.append([InlineKeyboardButton.a(
-        'К номинациям', 
-        callback_data=CallbackTypes.START
-    )])
-    
-    buttons.append([InlineKeyboardButton.a(
-        'К номинациям', 
-        callback_data=CallbackTypes.ABOUT
-    )])
+            if photo_ind != 0:
+                photo_buttons.append(InlineKeyboardButton.a(
+                    bot_content.prev_photo,
+                    callback_data=CallbackTypes.set_prev_photo(model_id, photo_ind, nomination_id, status)
+                ))
+            
+            buttons.append(photo_buttons[::-1])
 
-    bot.editMessageMedia(
-        chat_id=chat_id, 
-        message_id=message_id,
-        media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + photo, model.description), 
-        reply_markup=InlineKeyboardMarkup.a(buttons)
-    )
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.show_bio if status == 0 else bot_content.hide_bio,
+                callback_data=CallbackTypes.set_bio(model_id, photo_ind, nomination_id, status)
+            )])
+            
+            voted, user_vote = check_vote(tg_user, nomination_id)
+
+            if not voted:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.vote, 
+                    callback_data=CallbackTypes.set_vote(model_id, photo_ind, nomination_id, status)
+                )])
+            elif user_vote.model.id == model_id:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+            else:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked_in_this_nomination, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.back, 
+                callback_data=CallbackTypes.set_nomination(nomination_id)
+            )])
+
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + photo, str(model) + (f'\n{model.description}' if status == 1 else '')), 
+                reply_markup=InlineKeyboardMarkup.a(buttons)
+            )
+        else:
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', bot_content.update_menu_image, 
+                bot_content.update_menu),
+                reply_markup=InlineKeyboardMarkup.a([[
+                    InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+                ]])
+            )
+    else:
+        bot.editMessageMedia(
+            chat_id=chat_id, 
+            message_id=message_id,
+            media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url, 
+            bot_content.no_competition),
+            reply_markup=InlineKeyboardMarkup.a([[
+                InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+            ]])
+        )
 
 
 def process_vote(bot, chat_id, message_id, data, tg_user):
-    buttons = []
-    
-    model_id, photo_ind, nomination_id = data
+    bot_content = BotContent.objects.all().last()
+    competition = Competition.objects.filter(is_active=True)
 
-    model = Model.objects.get(id=model_id)
-    photos = Image.objects.filter(model=model)
+    if competition.exists():
+        competition = competition.first()
+        nominations = Nomination.objects.filter(competition=competition)
 
-    photo = photos[photo_ind].image.url
-    photo_buttons = []
+        model_id, photo_ind, nomination_id, status = data
 
+        if nomination_id in [nom.id for nom in nominations]:
+            buttons = []
+            
 
-    if photo_ind != 0:
-        photo_buttons.append(InlineKeyboardButton.a(
-            '<',
-            callback_data=CallbackTypes.set_prev_photo(model_id, photo_ind, nomination_id)
-        ))
-    
-    if photo_ind != len(photos) - 1:
-        photo_buttons.append(InlineKeyboardButton.a(
-            '>', 
-            callback_data=CallbackTypes.set_next_photo(model_id, photo_ind, nomination_id)
-        ))
+            model = Model.objects.get(id=model_id)
+            photos = Image.objects.filter(model=model)
 
-    buttons.append(photo_buttons)
-    nomination = Nomination.objects.get(id=nomination_id)
+            photo = photos[photo_ind].image.url
+            photo_buttons = []
 
-    voted, user_vote = check_vote(tg_user, nomination_id)
+            if photo_ind != 0:
+                photo_buttons.append(InlineKeyboardButton.a(
+                    bot_content.prev_photo,
+                    callback_data=CallbackTypes.set_prev_photo(model_id, photo_ind, nomination_id, status)
+                ))
+            
+            if photo_ind != len(photos) - 1:
+                photo_buttons.append(InlineKeyboardButton.a(
+                    bot_content.next_photo, 
+                    callback_data=CallbackTypes.set_next_photo(model_id, photo_ind, nomination_id, status)
+                ))
 
-    if not voted:
-        vote, _ = Vote.objects.get_or_create(
-            model=model, 
-            nomination=nomination
-        )    
-        vote.rating += 1
-        vote.save()
-        
-        user_vote = UserVote.objects.create(
-            tg_user=TelegramUser.objects.get(telegram_id=tg_user.telegram_id),
-            nomination=nomination, 
-            model=model
-        )
-        user_vote.save()
+            buttons.append(photo_buttons)
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.show_bio if status == 0 else bot_content.hide_bio,
+                callback_data=CallbackTypes.set_bio(model_id, photo_ind, nomination_id, status)
+            )])
 
-        buttons.append([InlineKeyboardButton.a(
-            'Ваш голос за эту модель был учтён!', 
-            callback_data=CallbackTypes.set_already_voted()
-        )])
+            nomination = Nomination.objects.get(id=nomination_id)
 
+            voted, user_vote = check_vote(tg_user, nomination_id)
+
+            if not voted:
+                vote, _ = Vote.objects.get_or_create(
+                    model=model, 
+                    nomination=nomination
+                )    
+                vote.rating += 1
+                vote.save()
+                
+                user_vote = UserVote.objects.create(
+                    tg_user=TelegramUser.objects.get(telegram_id=tg_user.telegram_id),
+                    nomination=nomination, 
+                    model=model
+                )
+                user_vote.save()
+
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+            else:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked_in_this_nomination, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.back, 
+                callback_data=CallbackTypes.set_nomination(nomination_id)
+            )])
+            
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + photo, str(model) + (f'\n{model.description}' if status == 1 else '')), 
+                reply_markup=InlineKeyboardMarkup.a(buttons)
+            )
+        else:
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', bot_content.update_menu_image, 
+                bot_content.update_menu),
+                reply_markup=InlineKeyboardMarkup.a([[
+                    InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+                ]])
+            )
     else:
-        buttons.append([InlineKeyboardButton.a(
-            'Вы уже проголосовали за модель в этой номинации!', 
-            callback_data=CallbackTypes.set_already_voted()
-        )])
-    
+        bot.editMessageMedia(
+            chat_id=chat_id, 
+            message_id=message_id,
+            media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url, 
+            bot_content.no_competition),
+            reply_markup=InlineKeyboardMarkup.a([[
+                InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+            ]])
+        )
 
-    buttons.append([InlineKeyboardButton.a(
-        'К номинациям', 
-        callback_data=CallbackTypes.START
-    )])
-    
-    buttons.append([InlineKeyboardButton.a(
-        'О конкурсе', 
-        callback_data=CallbackTypes.ABOUT
-    )])
 
-    bot.editMessageMedia(
-        chat_id=chat_id, 
-        message_id=message_id,
-        media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + photo, model.description), 
-        reply_markup=InlineKeyboardMarkup.a(buttons)
-    )
+def process_biography(bot, chat_id, message_id, data, tg_user):
+    bot_content = BotContent.objects.all().last()
+    competition = Competition.objects.filter(is_active=True)
+
+    if competition.exists():
+        competition = competition.first()
+        nominations = Nomination.objects.filter(competition=competition)
+
+        model_id, photo_ind, nomination_id, status = data 
+
+        if nomination_id in [nom.id for nom in nominations]:
+
+            buttons = []
+
+            model = Model.objects.get(id=model_id)
+            photos = Image.objects.filter(model=model)
+
+            voted, user_vote = check_vote(tg_user, nomination_id)
+            
+            if len(photos) == 0:
+                photo = bot_content.default_model_photo
+            else:
+                photo = photos[photo_ind].image.url
+
+            photo_buttons = []
+            status = 1 if status == 0 else 0 
+
+            if photo_ind > 0 and len(photos) != 1:
+                photo_buttons.append(InlineKeyboardButton.a(
+                    bot_content.prev_photo, 
+                    callback_data=CallbackTypes.set_prev_photo(model_id, photo_ind, nomination_id, status)
+                ))
+
+            if len(photos) > 1 and photo_ind < len(photos):
+                photo_buttons.append(InlineKeyboardButton.a(
+                    bot_content.next_photo, 
+                    callback_data=CallbackTypes.set_next_photo(model_id, photo_ind, nomination_id, status)
+                ))
+
+            buttons.append(photo_buttons)
+
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.show_bio if status == 0 else bot_content.hide_bio,
+                callback_data=CallbackTypes.set_bio(model_id, photo_ind, nomination_id, status)
+            )])
+            
+            if not voted:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.vote, 
+                    callback_data=CallbackTypes.set_vote(model_id, photo_ind, nomination_id, status)
+                )])
+            elif user_vote.model.id == model_id:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+            else:
+                buttons.append([InlineKeyboardButton.a(
+                    bot_content.was_checked_in_this_nomination, 
+                    callback_data=CallbackTypes.set_already_voted()
+                )])
+
+            buttons.append([InlineKeyboardButton.a(
+                bot_content.back, 
+                callback_data=CallbackTypes.set_nomination(nomination_id)
+            )])
+
+            bot.editMessageMedia(
+                chat_id=chat_id,
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + photo, 
+                    str(model) + (f'\n{model.description}' if status == 1 else '')),
+                reply_markup=InlineKeyboardMarkup.a(buttons)
+            )
+            
+        else:
+            bot.editMessageMedia(
+                chat_id=chat_id, 
+                message_id=message_id,
+                media=InputMediaPhoto.a('photo', bot_content.update_menu_image, 
+                bot_content.update_menu),
+                reply_markup=InlineKeyboardMarkup.a([[
+                    InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+                ]])
+            )
+    else:
+        bot.editMessageMedia(
+            chat_id=chat_id, 
+            message_id=message_id,
+            media=InputMediaPhoto.a('photo', 'https://1bot.wiedergeburt.kz' + bot_content.no_competition_image.url, 
+            bot_content.no_competition),
+            reply_markup=InlineKeyboardMarkup.a([[
+                InlineKeyboardButton.a(bot_content.update, callback_data=CallbackTypes.START)
+            ]])
+        )
