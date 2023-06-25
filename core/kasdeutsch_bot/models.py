@@ -122,7 +122,7 @@ class Competition(models.Model):
     is_active = models.BooleanField(verbose_name='Активный', default=False, blank=True)    
     about = models.TextField(verbose_name='О конкурсе', default='', blank=True)
     image = models.ImageField(verbose_name='Фото', validators=[validate_image])
-    image_about = models.ImageField(verbose_name='About photo', null=True, blank=True)
+    image_about = models.ImageField(verbose_name='About photo', null=True, blank=False)
     class Meta:
         verbose_name = 'Конкурс'
         verbose_name_plural = 'конкурсы'
