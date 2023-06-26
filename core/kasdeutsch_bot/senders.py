@@ -1,9 +1,7 @@
-from django.db.models.lookups import In
 from django_tgbot.types.inlinekeyboardbutton import InlineKeyboardButton
 from django_tgbot.types.inlinekeyboardmarkup import InlineKeyboardMarkup
 from django_tgbot.types.keyboardbutton import KeyboardButton
 from django_tgbot.types.replykeyboardmarkup import ReplyKeyboardMarkup
-from django_tgbot.types.replykeyboardremove import ReplyKeyboardRemove
 from django_tgbot.types.inputmedia import InputMediaPhoto
 from .models import Nomination, TelegramUser, Vote, \
     Model, Image, UserVote, Competition, BotContent, \
@@ -473,7 +471,7 @@ def process_prev_photo(bot, chat_id, message_id, data, tg_user):
         )
 
 
-def process_vote(bot, chat_id, message_id, data, tg_user):
+def process_vote(bot, chat_id, callback_id, message_id, data, tg_user: TelegramUser):
     bot_content = BotContent.objects.all().last()
     competition = Competition.objects.filter(is_active=True)
 
@@ -526,26 +524,57 @@ def process_vote(bot, chat_id, message_id, data, tg_user):
                     vote, _ = Vote.objects.get_or_create(
                         model=model, 
                         nomination=nomination
-                    )    
-                    vote.rating += 1
-                    vote.save()
-                    
+                    )
+
                     user_vote = UserVote.objects.create(
                         tg_user=TelegramUser.objects.get(telegram_id=tg_user.telegram_id),
                         nomination=nomination, 
-                        model=model
+                        model=model,
+                        credited=not competition.every_nomination_vote_required,
                     )
                     user_vote.save()
 
+                    is_voted_all_nominations = False
+
+                    if competition.every_nomination_vote_required:
+                        user_votes = UserVote.objects.filter(
+                            tg_user=tg_user,
+                            nomination__competition=competition,
+                            credited=False
+                        )
+                        is_voted_all_nominations = len(user_votes) == len(competition.nomination_set.all())
+                        if is_voted_all_nominations:
+                            for curr_user_vote in user_votes:
+                                curr_user_vote.credited = True
+                                curr_user_vote = Vote.objects.get(
+                                    model=curr_user_vote.model,
+                                    nomination=curr_user_vote.nomination,
+                                )
+                                curr_user_vote.rating += 1
+                                curr_user_vote.save()
+                    else:
+                        vote.rating += 1
+                        vote.save()
+
+                    if is_voted_all_nominations:
+                        bot.answerCallbackQuery(
+                            callback_id,
+                            text=bot_content.was_checked_and_credited,
+                        )
+                    else:
+                        bot.answerCallbackQuery(
+                            callback_id,
+                            text=bot_content.was_checked_not_credited,
+                        )
                     buttons.append([InlineKeyboardButton.a(
-                        bot_content.was_checked, 
+                        bot_content.was_checked,
                         callback_data=CallbackTypes.set_already_voted()
                     )])
                 else:
                     try:
                         chat_state = TelegramState.objects.get(
-                            telegram_user = tg_user,
-                            telegram_chat = TelegramChat.objects.get(telegram_id=chat_id)
+                            telegram_user=tg_user,
+                            telegram_chat=TelegramChat.objects.get(telegram_id=chat_id)
                         )
                     except (TelegramState.DoesNotExist, TelegramChat.DoesNotExist):
                         chat_state = None

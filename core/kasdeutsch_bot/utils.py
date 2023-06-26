@@ -1,7 +1,6 @@
 from .models import Nomination, UserVote, \
     Competition, Vote, TelegramState, TelegramChat
 
-from .bot import TelegramBot
 
 def check_vote(tg_user, nomination_id):
     try:

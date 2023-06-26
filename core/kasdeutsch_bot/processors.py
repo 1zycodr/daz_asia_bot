@@ -17,6 +17,7 @@ available_options = {
     '/start': send_start_message
 }
 
+
 def dispatch(bot: TelegramBot, message: Message, chat_id, tg_user):
     if message.type() == message_types.Contact:
         if tg_user is not None:
@@ -67,7 +68,7 @@ def dispatch_callback(bot: TelegramBot, callback, chat_id, tg_user):
         elif callback_type == CallbackTypes.ALREADY_VOTED:
             send_already_voted(bot, callback.get_id())
         elif callback_type == CallbackTypes.VOTE:
-            process_vote(bot, chat_id, callback.get_message().get_message_id(), \
+            process_vote(bot, chat_id, callback.get_id(), callback.get_message().get_message_id(), \
                 callback_answ_data, tg_user)
         elif callback_type == CallbackTypes.ABOUT:
             send_about(bot, chat_id, callback.get_message().get_message_id())
@@ -95,7 +96,6 @@ def start_message(bot: TelegramBot, update: Update, state: TelegramState):
         tg_user = TelegramUser.objects.filter(telegram_id=user.get_id())[0]
     except IndexError: 
         tg_user = None
-
 
     dispatch(bot, message, chat.get_id(), tg_user)
 

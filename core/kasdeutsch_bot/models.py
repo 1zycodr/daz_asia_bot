@@ -29,7 +29,13 @@ class UserVote(models.Model):
     nomination = models.ForeignKey('Nomination', on_delete=models.CASCADE)
     model = models.ForeignKey('Model', on_delete=models.CASCADE)
     vote_date = models.DateTimeField(verbose_name='Время голосования', auto_now_add=True, blank=True)
-    
+    credited = models.BooleanField(
+        verbose_name='Активен ли голос (учитывается при условии голосования во всех номинациях)',
+        blank=False,
+        null=False,
+        default=False,
+    )
+
     class Meta:
         unique_together = ('tg_user', 'nomination')
         verbose_name = 'Голос'
@@ -123,6 +129,14 @@ class Competition(models.Model):
     about = models.TextField(verbose_name='О конкурсе', default='', blank=True)
     image = models.ImageField(verbose_name='Фото', validators=[validate_image])
     image_about = models.ImageField(verbose_name='About photo', null=True, blank=False)
+
+    every_nomination_vote_required = models.BooleanField(
+        verbose_name='Необходимо голосовать в каждой номинации',
+        blank=False,
+        null=False,
+        default=False,
+    )
+
     class Meta:
         verbose_name = 'Конкурс'
         verbose_name_plural = 'конкурсы'
@@ -160,6 +174,8 @@ class BotContent(models.Model):
     next_photo = models.CharField(verbose_name='Текст кнопки следующей фотографии', max_length=50, default='>')
     prev_photo = models.CharField(verbose_name='Текст кнопки предыдущей фотографии', max_length=50, default='<')
     was_checked = models.CharField(verbose_name='Текст кнопки "Проголосовать", когда голос был учтён у текущей модели', max_length=50, default='Ваш голос за эту модель был учтён!')
+    was_checked_and_credited = models.CharField(verbose_name='Текст после нажатия кнопки "Проголосовать", когда голос был учтён у текущей модели и во всех номинациях (если такая настройка включена)', max_length=50, default='Ваши голоса во всех номинациях были учтены!')
+    was_checked_not_credited = models.CharField(verbose_name='Текст после нажатия кнопки "Проголосовать", когда голос не был учтён, но сохранён (если такая настройка включена)', max_length=50, default='Ваши голоса будут учтены когда проголосуете во всех номинациях!')
     was_checked_in_this_nomination = models.CharField(verbose_name='Текст кнопки "Проголосовать", когда голос был учтён у другой модели в этой категории', max_length=50, default='Вы уже проголосовали за модель в этой номинации!')
     chose_nomination = models.CharField(verbose_name='Текст меню выбора номинации', max_length=255, default='Выберите номинацию, в которой хотите проголосовать. У вас есть один голос в каждой номинации.')
     no_competition = models.CharField(verbose_name='Текст меню когда конкурс отсутствует', max_length=255, default='Нет активных конкурсов.')
