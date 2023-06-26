@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='botcontent',
             name='was_checked_not_credited',
-            field=models.CharField(default='Голоса будут учтены после голоса во всех номинациях!', max_length=50, verbose_name='Текст после нажатия кнопки "Проголосовать", когда голос не был учтён, но сохранён (если такая настройка включена)'),
+            field=models.CharField(default='Голоса будут учтены после голоса во всех номинациях!', max_length=55, verbose_name='Текст после нажатия кнопки "Проголосовать", когда голос не был учтён, но сохранён (если такая настройка включена)'),
         ),
     ]
