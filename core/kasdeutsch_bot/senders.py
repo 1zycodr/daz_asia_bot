@@ -545,11 +545,11 @@ def process_vote(bot, chat_id, callback_id, message_id, data, tg_user: TelegramU
                         is_voted_all_nominations = len(user_votes) == len(competition.nomination_set.all())
                         if is_voted_all_nominations:
                             for curr_user_vote in user_votes:
-                                curr_user_vote.credited = True
                                 curr_user_vote = Vote.objects.get(
                                     model=curr_user_vote.model,
                                     nomination=curr_user_vote.nomination,
                                 )
+                                curr_user_vote.credited = True
                                 curr_user_vote.rating += 1
                                 curr_user_vote.save()
                     else:
