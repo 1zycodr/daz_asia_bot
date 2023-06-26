@@ -175,7 +175,7 @@ class BotContent(models.Model):
     prev_photo = models.CharField(verbose_name='Текст кнопки предыдущей фотографии', max_length=50, default='<')
     was_checked = models.CharField(verbose_name='Текст кнопки "Проголосовать", когда голос был учтён у текущей модели', max_length=50, default='Ваш голос за эту модель был учтён!')
     was_checked_and_credited = models.CharField(verbose_name='Текст после нажатия кнопки "Проголосовать", когда голос был учтён у текущей модели и во всех номинациях (если такая настройка включена)', max_length=50, default='Ваши голоса во всех номинациях были учтены!')
-    was_checked_not_credited = models.CharField(verbose_name='Текст после нажатия кнопки "Проголосовать", когда голос не был учтён, но сохранён (если такая настройка включена)', max_length=50, default='Ваши голоса будут учтены когда проголосуете во всех номинациях!')
+    was_checked_not_credited = models.CharField(verbose_name='Текст после нажатия кнопки "Проголосовать", когда голос не был учтён, но сохранён (если такая настройка включена)', max_length=55, default='Голоса будут учтены после голоса во всех номинациях!')
     was_checked_in_this_nomination = models.CharField(verbose_name='Текст кнопки "Проголосовать", когда голос был учтён у другой модели в этой категории', max_length=50, default='Вы уже проголосовали за модель в этой номинации!')
     chose_nomination = models.CharField(verbose_name='Текст меню выбора номинации', max_length=255, default='Выберите номинацию, в которой хотите проголосовать. У вас есть один голос в каждой номинации.')
     no_competition = models.CharField(verbose_name='Текст меню когда конкурс отсутствует', max_length=255, default='Нет активных конкурсов.')
