@@ -1,3 +1,4 @@
+from django.db.models import Count
 from django_tgbot.types.inlinekeyboardbutton import InlineKeyboardButton
 from django_tgbot.types.inlinekeyboardmarkup import InlineKeyboardMarkup
 from django_tgbot.types.keyboardbutton import KeyboardButton
@@ -542,7 +543,10 @@ def process_vote(bot, chat_id, callback_id, message_id, data, tg_user: TelegramU
                             nomination__competition=competition,
                             credited=False
                         )
-                        is_voted_all_nominations = len(user_votes) == len(competition.nomination_set.all())
+                        current_nominations = competition.nomination_set.all().\
+                            annotate(votes_count=Count('vote')).\
+                            filter(votes_count__gt=1)
+                        is_voted_all_nominations = len(user_votes) == len(current_nominations)
                         if is_voted_all_nominations:
                             for curr_user_vote in user_votes:
                                 curr_user_vote = Vote.objects.get(
@@ -560,11 +564,13 @@ def process_vote(bot, chat_id, callback_id, message_id, data, tg_user: TelegramU
                         bot.answerCallbackQuery(
                             callback_id,
                             text=bot_content.was_checked_and_credited,
+                            show_alert=True,
                         )
                     else:
                         bot.answerCallbackQuery(
                             callback_id,
                             text=bot_content.was_checked_not_credited,
+                            show_alert=True,
                         )
                     buttons.append([InlineKeyboardButton.a(
                         bot_content.was_checked,

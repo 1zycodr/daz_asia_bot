@@ -38,7 +38,6 @@ def delete_request_phone_message(bot, tg_user, chat_id):
         )
     except (TelegramState.DoesNotExist, TelegramChat.DoesNotExist):
         chat_state = None
-        print('yoN')
 
     if chat_state:
         if chat_state.request_phone_number_message_id != '':

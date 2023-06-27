@@ -18,6 +18,22 @@ class TelegramUser(AbstractTelegramUser):
     last_name = models.CharField(max_length=255, db_collation='utf8mb4_general_ci', blank=True, null=True)
     phone_number = models.CharField(max_length=20, null=True, blank=True)
 
+    name = models.CharField(
+        max_length=100,
+        verbose_name='Имя пользователя',
+        null=True,
+        blank=True,
+        default=None,
+    )
+
+    job = models.CharField(
+        max_length=100,
+        verbose_name='Должность',
+        null=True,
+        blank=True,
+        default=None,
+    )
+
     def __str__(self) -> str:
         res = super().__str__().replace('None', '').replace('(@)', '')
         res = res[:-1] + ((', ' + self.phone_number) if self.phone_number else '') + res[-1]
@@ -132,6 +148,13 @@ class Competition(models.Model):
 
     every_nomination_vote_required = models.BooleanField(
         verbose_name='Необходимо голосовать в каждой номинации',
+        blank=False,
+        null=False,
+        default=False,
+    )
+
+    should_request_name_and_job = models.BooleanField(
+        verbose_name='Запрашивать у пользователей имя и должность для данного конкурса',
         blank=False,
         null=False,
         default=False,
